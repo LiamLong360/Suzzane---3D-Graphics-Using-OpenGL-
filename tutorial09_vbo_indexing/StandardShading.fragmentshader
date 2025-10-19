@@ -1,0 +1,68 @@
+// -----------------------------------------------------------------------------
+// Author: Liam Long
+// Class: ECE4122 (Lab 3)
+// Last Date Modified: 2025-10-18
+//
+// Description / Purpose of this file:
+// Fragment shader that shades either a textured surface or a flat‑tinted
+// surface with a simple Blinn/Phong‑style model. Ambient is always applied;
+// diffuse + specular can be toggled at runtime via the uniform
+// `uEnableDiffuseSpec` (toggled by the 'L' key in controls). The shader also
+// supports rendering a solid color (e.g., the floor) by setting `uUseTint`.
+// -----------------------------------------------------------------------------
+#version 330 core
+
+// Interpolated values from the vertex shader
+in vec2 UV;
+in vec3 Position_worldspace;
+in vec3 Normal_cameraspace;
+in vec3 EyeDirection_cameraspace;
+in vec3 LightDirection_cameraspace;
+
+// Output
+out vec3 color;
+
+// Uniforms
+uniform sampler2D myTextureSampler;
+uniform vec3 LightPosition_worldspace;
+
+// NEW: tint + lighting toggle
+uniform bool uUseTint;             // true for flat color (floor)
+uniform vec3 uTint;                // e.g. vec3(0,1,0)
+uniform bool uEnableDiffuseSpec;   // toggled by the 'L' key
+
+void main()
+{
+    // Light setup
+    vec3 LightColor  = vec3(1.0, 1.0, 1.0);
+    float LightPower = 50.0;
+
+    // Base (diffuse) color: either texture or solid tint
+    // Use either the texture (typical) or a provided flat tint (for the floor).
+    vec3 base = uUseTint ? uTint : texture(myTextureSampler, UV).rgb;
+
+    // Ambient term stays on even when we toggle diffuse+spec off
+    vec3 ambient = 0.1 * base;
+
+    // Distance & directions
+    float dist = length(LightPosition_worldspace - Position_worldspace);
+    vec3  n    = normalize(Normal_cameraspace);
+    vec3  l    = normalize(LightDirection_cameraspace);
+    vec3  E    = normalize(EyeDirection_cameraspace);
+    vec3  R    = reflect(-l, n);
+
+    float cosTheta = max(dot(n, l), 0.0);
+    float cosAlpha = max(dot(E, R), 0.0);
+
+    float att = LightPower / (dist * dist);
+
+    // Diffuse + specular terms (will be masked by the toggle)
+    vec3 diffuse  = base * LightColor * att * cosTheta;
+    vec3 specular = vec3(0.3) * LightColor * att * pow(cosAlpha, 5.0);
+
+    // Toggle mask: 1.0 = on, 0.0 = off
+    float mask = uEnableDiffuseSpec ? 1.0 : 0.0;
+    
+    // Final color with toggle
+    color = ambient + mask * (diffuse + specular);
+}
